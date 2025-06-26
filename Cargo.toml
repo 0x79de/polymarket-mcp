@@ -1,0 +1,46 @@
+[package]
+name = "polymarket-mcp"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "MCP server for Polymarket prediction market data"
+license = "MIT"
+repository = "https://github.com/your-username/polymarket-mcp"
+
+[dependencies]
+# MCP Rust SDK
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", branch = "main", features = ["server", "macros"] }
+
+# Async runtime
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "io-std"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "gzip"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4"] }
+
+# Configuration
+config = "0.14"
+toml = "0.8"
+dotenv = "0.15"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.4"
