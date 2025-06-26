@@ -24,7 +24,7 @@ descriptions, and categories
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/polymarket-mcp
+   git clone https://github.com/0x79de/polymarket-mcp
    cd polymarket-mcp
    ```
 
