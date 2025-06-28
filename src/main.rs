@@ -5,14 +5,12 @@ mod polymarket_client;
 
 use anyhow::Result;
 use config::Config;
-use error::{Metrics, RequestId};
 use models::*;
 use polymarket_client::PolymarketClient;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
 use tracing_subscriber::{self, EnvFilter, FmtSubscriber};
 
 #[derive(Debug)]
@@ -20,120 +18,69 @@ pub struct PolymarketMcpServer {
     client: Arc<PolymarketClient>,
     resource_cache: Arc<RwLock<HashMap<String, ResourceCache>>>,
     config: Arc<Config>,
-    metrics: Arc<RwLock<Metrics>>,
 }
 
 impl PolymarketMcpServer {
     pub fn new() -> Result<Self> {
         let config = Arc::new(Config::load()?);
         let client = Arc::new(PolymarketClient::new_with_config(&config)?);
-        Ok(Self { 
+        Ok(Self {
             client,
             resource_cache: Arc::new(RwLock::new(HashMap::new())),
             config,
-            metrics: Arc::new(RwLock::new(Metrics::new())),
         })
     }
-    
+
     pub fn with_config(config: Config) -> Result<Self> {
         let config = Arc::new(config);
         let client = Arc::new(PolymarketClient::new_with_config(&config)?);
-        Ok(Self { 
+        Ok(Self {
             client,
             resource_cache: Arc::new(RwLock::new(HashMap::new())),
             config,
-            metrics: Arc::new(RwLock::new(Metrics::new())),
         })
     }
 
     pub async fn get_active_markets(&self, limit: Option<u32>) -> Result<Value> {
-        let request_id = RequestId::new();
-        info!(request_id = %request_id, "Fetching active markets with limit: {:?}", limit);
-        
-        {
-            let mut metrics = self.metrics.write().await;
-            metrics.increment_api_requests();
-        }
-        
-        let start_time = std::time::Instant::now();
-        
-        match self.client.get_active_markets(limit).await {
-            Ok(markets) => {
-                let response_time = start_time.elapsed().as_millis() as f64;
-                {
-                    let mut metrics = self.metrics.write().await;
-                    metrics.update_avg_response_time(response_time);
-                }
-                
-                let result = json!({
-                    "markets": markets,
-                    "count": markets.len(),
-                    "request_id": request_id.as_str()
-                });
-                
-                Ok(result)
-            }
-            Err(e) => {
-                {
-                    let mut metrics = self.metrics.write().await;
-                    metrics.increment_api_failures();
-                }
-                warn!(request_id = %request_id, "Failed to fetch active markets: {}", e);
-                Err(e.into())
-            }
-        }
+        let markets = self.client.get_active_markets(limit).await?;
+        Ok(json!({
+            "markets": markets,
+            "count": markets.len()
+        }))
     }
 
     pub async fn get_market_details(&self, market_id: String) -> Result<Value> {
-        info!("Fetching market details for: {}", market_id);
-        
         let market = self.client.get_market_by_id(&market_id).await?;
-        let result = json!(market);
-        
-        Ok(result)
+        Ok(json!(market))
     }
 
     pub async fn search_markets(&self, keyword: String, limit: Option<u32>) -> Result<Value> {
-        info!("Searching markets for keyword: '{}' with limit: {:?}", keyword, limit);
-        
         let markets = self.client.search_markets(&keyword, limit).await?;
-        let result = json!({
+        Ok(json!({
             "markets": markets,
             "count": markets.len(),
             "keyword": keyword
-        });
-        
-        Ok(result)
+        }))
     }
 
     pub async fn get_market_prices(&self, market_id: String) -> Result<Value> {
-        info!("Fetching market prices for: {}", market_id);
-        
         let prices = self.client.get_market_prices(&market_id).await?;
-        let result = json!({
+        Ok(json!({
             "market_id": market_id,
             "prices": prices
-        });
-        
-        Ok(result)
+        }))
     }
 
     pub async fn get_trending_markets(&self, limit: Option<u32>) -> Result<Value> {
-        info!("Fetching trending markets with limit: {:?}", limit);
-        
         let markets = self.client.get_trending_markets(limit).await?;
-        let result = json!({
+        Ok(json!({
             "markets": markets,
             "count": markets.len()
-        });
-        
-        Ok(result)
+        }))
     }
 
     // MCP Resources Support
     pub async fn list_resources(&self) -> Result<Value> {
-        info!("Listing available MCP resources");
-        
         let resources = vec![
             McpResource {
                 uri: "markets:active".to_string(),
@@ -148,19 +95,14 @@ impl PolymarketMcpServer {
                 mime_type: "application/json".to_string(),
             },
         ];
-
         Ok(json!({ "resources": resources }))
     }
 
     pub async fn read_resource(&self, uri: &str) -> Result<Value> {
-        info!("Reading resource: {}", uri);
-
-        // Check cache first
         {
             let cache = self.resource_cache.read().await;
             if let Some(cached) = cache.get(uri) {
                 if !cached.is_expired() {
-                    info!("Returning cached resource for: {}", uri);
                     return Ok(json!({
                         "contents": [{
                             "uri": uri,
@@ -199,8 +141,7 @@ impl PolymarketMcpServer {
             }
         };
 
-        // Cache the result
-        {
+        if self.config.cache.enabled {
             let mut cache = self.resource_cache.write().await;
             let ttl = self.config.resource_cache_ttl().as_secs();
             cache.insert(uri.to_string(), ResourceCache::new(content.clone(), ttl));
@@ -217,8 +158,6 @@ impl PolymarketMcpServer {
 
     // MCP Prompts Support
     pub async fn list_prompts(&self) -> Result<Value> {
-        info!("Listing available MCP prompts");
-        
         let prompts = vec![
             McpPrompt {
                 name: "analyze_market".to_string(),
@@ -269,19 +208,18 @@ impl PolymarketMcpServer {
     }
 
     pub async fn get_prompt(&self, name: &str, arguments: Option<Value>) -> Result<Value> {
-        info!("Getting prompt: {} with arguments: {:?}", name, arguments);
-        
         let args = arguments.unwrap_or_default();
-        
+
         let messages = match name {
             "analyze_market" => {
-                let market_id = args.get("market_id")
+                let market_id = args
+                    .get("market_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("market_id argument is required"))?;
-                
+
                 let market = self.client.get_market_by_id(market_id).await?;
                 let prices = self.client.get_market_prices(market_id).await?;
-                
+
                 vec![
                     McpPromptMessage {
                         role: "user".to_string(),
@@ -298,17 +236,19 @@ impl PolymarketMcpServer {
                 ]
             }
             "find_arbitrage" => {
-                let keyword = args.get("keyword")
+                let keyword = args
+                    .get("keyword")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("keyword argument is required"))?;
-                
-                let limit = args.get("limit")
+
+                let limit = args
+                    .get("limit")
                     .and_then(|v| v.as_u64())
                     .map(|l| l as u32)
                     .unwrap_or(10);
-                
+
                 let markets = self.client.search_markets(keyword, Some(limit)).await?;
-                
+
                 vec![
                     McpPromptMessage {
                         role: "user".to_string(),
@@ -322,14 +262,15 @@ impl PolymarketMcpServer {
                 ]
             }
             "market_summary" => {
-                let limit = args.get("limit")
+                let limit = args
+                    .get("limit")
                     .and_then(|v| v.as_u64())
                     .map(|l| l as u32)
                     .unwrap_or(5);
-                
+
                 let trending = self.client.get_trending_markets(Some(limit)).await?;
                 let active = self.client.get_active_markets(Some(limit)).await?;
-                
+
                 vec![
                     McpPromptMessage {
                         role: "user".to_string(),
@@ -348,36 +289,61 @@ impl PolymarketMcpServer {
 
         Ok(json!({ "messages": messages }))
     }
-
-    pub async fn get_metrics(&self) -> Result<Value> {
-        let metrics = self.metrics.read().await;
-        Ok(json!({
-            "api_requests_total": metrics.api_requests_total,
-            "api_requests_failed": metrics.api_requests_failed,
-            "cache_hits": metrics.cache_hits,
-            "cache_misses": metrics.cache_misses,
-            "cache_hit_ratio": metrics.cache_hit_ratio(),
-            "error_rate": metrics.error_rate(),
-            "active_connections": metrics.active_connections,
-            "avg_response_time_ms": metrics.avg_response_time_ms
-        }))
-    }
 }
 
+use clap::{Arg, Command};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader as AsyncBufReader};
+use tokio::signal;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Parse command line arguments
+    let matches = Command::new("polymarket-mcp")
+        .version(env!("CARGO_PKG_VERSION"))
+        .about("Polymarket Model Context Protocol Server")
+        .arg(
+            Arg::new("config")
+                .short('c')
+                .long("config")
+                .value_name("FILE")
+                .help("Configuration file path"),
+        )
+        .arg(
+            Arg::new("log-level")
+                .short('l')
+                .long("log-level")
+                .value_name("LEVEL")
+                .help("Log level (trace, debug, info, warn, error)")
+                .default_value("info"),
+        )
+        .arg(
+            Arg::new("port")
+                .short('p')
+                .long("port")
+                .value_name("PORT")
+                .help("Port to listen on (for TCP mode)")
+                .value_parser(clap::value_parser!(u16)),
+        )
+        .get_matches();
+
     // Load environment variables from .env file if it exists
     dotenv::dotenv().ok();
-    
-    // Load configuration
-    let config = Config::load()?;
-    
+
+    // Load configuration with optional config file override
+    let mut config = Config::load()?;
+    if let Some(config_path) = matches.get_one::<String>("config") {
+        config = Config::load_from_file(config_path)?;
+    }
+
+    // Override log level if specified
+    if let Some(log_level) = matches.get_one::<String>("log-level") {
+        config.logging.level = log_level.clone();
+    }
+
     // Initialize tracing subscriber to write to stderr only
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&config.logging.level));
-        
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.logging.level));
+
     // Write logs to stderr to avoid interfering with MCP JSON protocol on stdout
     FmtSubscriber::builder()
         .with_env_filter(env_filter)
@@ -385,55 +351,70 @@ async fn main() -> Result<()> {
         .compact()
         .init();
 
-    eprintln!("Starting Polymarket MCP Server");
-    
     // Create the MCP server handler with configuration
     let server = Arc::new(PolymarketMcpServer::with_config(config)?);
-    
+
+    // Set up graceful shutdown handling
+    let shutdown_signal = async {
+        signal::ctrl_c()
+            .await
+            .expect("Failed to install CTRL+C signal handler");
+    };
+
     // Set up MCP server using stdin/stdout
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
-    
+
     let mut reader = AsyncBufReader::new(stdin);
     let mut writer = stdout;
-    
+
     let mut line = String::new();
-    
-    loop {
-        line.clear();
-        match reader.read_line(&mut line).await {
-            Ok(0) => break, // EOF
-            Ok(_) => {
-                if let Ok(request) = serde_json::from_str::<serde_json::Value>(&line) {
-                    if let Some(response) = handle_mcp_request(&server, request).await {
-                        let response_json = serde_json::to_string(&response).unwrap();
-                        writer.write_all(response_json.as_bytes()).await.unwrap();
-                        writer.write_all(b"\n").await.unwrap();
-                        writer.flush().await.unwrap();
+
+    // Main server loop with graceful shutdown
+    tokio::select! {
+        _ = shutdown_signal => {}
+        _ = async {
+            loop {
+                line.clear();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => break, // EOF
+                    Ok(_) => {
+                        if let Ok(request) = serde_json::from_str::<serde_json::Value>(&line) {
+                            if let Some(response) = handle_mcp_request(&server, request).await {
+                                let response_json = serde_json::to_string(&response).unwrap();
+                                if writer.write_all(response_json.as_bytes()).await.is_err() ||
+                                   writer.write_all(b"\n").await.is_err() ||
+                                   writer.flush().await.is_err() {
+                                    break;
+                                }
+                            }
+                        }
                     }
+                    Err(_) => break,
                 }
             }
-            Err(e) => {
-                eprintln!("Error reading from stdin: {}", e);
-                break;
-            }
-        }
+        } => {}
     }
-    
-    eprintln!("Shutting down Polymarket MCP Server");
+
     Ok(())
 }
 
-async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_json::Value) -> Option<serde_json::Value> {
+async fn handle_mcp_request(
+    server: &Arc<PolymarketMcpServer>,
+    request: serde_json::Value,
+) -> Option<serde_json::Value> {
     let method = request.get("method")?.as_str()?;
     let id = request.get("id").cloned();
-    let params = request.get("params").cloned().unwrap_or(serde_json::Value::Null);
-    
+    let params = request
+        .get("params")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+
     // Handle notifications (no response expected)
     if method.starts_with("notifications/") {
         return None;
     }
-    
+
     let result = match method {
         "initialize" => {
             json!({
@@ -445,7 +426,7 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                 },
                 "serverInfo": {
                     "name": "polymarket-mcp",
-                    "version": "1.0.0"
+                    "version": env!("CARGO_PKG_VERSION")
                 }
             })
         }
@@ -529,11 +510,17 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
         }
         "tools/call" => {
             let name = params.get("name")?.as_str()?;
-            let arguments = params.get("arguments").cloned().unwrap_or(serde_json::Value::Object(Default::default()));
-            
+            let arguments = params
+                .get("arguments")
+                .cloned()
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+
             match name {
                 "get_active_markets" => {
-                    let limit = arguments.get("limit").and_then(|v| v.as_u64()).map(|l| l as u32);
+                    let limit = arguments
+                        .get("limit")
+                        .and_then(|v| v.as_u64())
+                        .map(|l| l as u32);
                     match server.get_active_markets(limit).await {
                         Ok(result) => json!({
                             "content": [{
@@ -543,11 +530,11 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                         }),
                         Err(e) => json!({
                             "content": [{
-                                "type": "text", 
+                                "type": "text",
                                 "text": format!("Error: {}", e)
                             }],
                             "isError": true
-                        })
+                        }),
                     }
                 }
                 "get_market_details" => {
@@ -565,12 +552,15 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                                 "text": format!("Error: {}", e)
                             }],
                             "isError": true
-                        })
+                        }),
                     }
                 }
                 "search_markets" => {
                     let keyword = arguments.get("keyword")?.as_str()?.to_string();
-                    let limit = arguments.get("limit").and_then(|v| v.as_u64()).map(|l| l as u32);
+                    let limit = arguments
+                        .get("limit")
+                        .and_then(|v| v.as_u64())
+                        .map(|l| l as u32);
                     match server.search_markets(keyword, limit).await {
                         Ok(result) => json!({
                             "content": [{
@@ -584,7 +574,7 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                                 "text": format!("Error: {}", e)
                             }],
                             "isError": true
-                        })
+                        }),
                     }
                 }
                 "get_market_prices" => {
@@ -602,11 +592,14 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                                 "text": format!("Error: {}", e)
                             }],
                             "isError": true
-                        })
+                        }),
                     }
                 }
                 "get_trending_markets" => {
-                    let limit = arguments.get("limit").and_then(|v| v.as_u64()).map(|l| l as u32);
+                    let limit = arguments
+                        .get("limit")
+                        .and_then(|v| v.as_u64())
+                        .map(|l| l as u32);
                     match server.get_trending_markets(limit).await {
                         Ok(result) => json!({
                             "content": [{
@@ -620,7 +613,7 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                                 "text": format!("Error: {}", e)
                             }],
                             "isError": true
-                        })
+                        }),
                     }
                 }
                 _ => json!({
@@ -629,18 +622,16 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                         "text": format!("Unknown tool: {}", name)
                     }],
                     "isError": true
-                })
+                }),
             }
         }
-        "resources/list" => {
-            match server.list_resources().await {
-                Ok(result) => result,
-                Err(e) => json!({
-                    "resources": [],
-                    "error": format!("Error listing resources: {}", e)
-                })
-            }
-        }
+        "resources/list" => match server.list_resources().await {
+            Ok(result) => result,
+            Err(e) => json!({
+                "resources": [],
+                "error": format!("Error listing resources: {}", e)
+            }),
+        },
         "resources/read" => {
             let uri = params.get("uri")?.as_str()?;
             match server.read_resource(uri).await {
@@ -648,18 +639,16 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                 Err(e) => json!({
                     "contents": [],
                     "error": format!("Error reading resource: {}", e)
-                })
+                }),
             }
         }
-        "prompts/list" => {
-            match server.list_prompts().await {
-                Ok(result) => result,
-                Err(e) => json!({
-                    "prompts": [],
-                    "error": format!("Error listing prompts: {}", e)
-                })
-            }
-        }
+        "prompts/list" => match server.list_prompts().await {
+            Ok(result) => result,
+            Err(e) => json!({
+                "prompts": [],
+                "error": format!("Error listing prompts: {}", e)
+            }),
+        },
         "prompts/get" => {
             let name = params.get("name")?.as_str()?;
             let arguments = params.get("arguments").cloned();
@@ -668,7 +657,7 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
                 Err(e) => json!({
                     "messages": [],
                     "error": format!("Error getting prompt: {}", e)
-                })
+                }),
             }
         }
         _ => {
@@ -680,7 +669,7 @@ async fn handle_mcp_request(server: &Arc<PolymarketMcpServer>, request: serde_js
             })
         }
     };
-    
+
     Some(json!({
         "jsonrpc": "2.0",
         "id": id,

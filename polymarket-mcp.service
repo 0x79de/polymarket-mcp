@@ -1,0 +1,54 @@
+[Unit]
+Description=Polymarket MCP Server
+Documentation=https://github.com/0x79de/polymarket-mcp
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polymarket
+Group=polymarket
+WorkingDirectory=/opt/polymarket-mcp
+ExecStart=/usr/local/bin/polymarket-mcp
+Restart=always
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Environment configuration
+Environment=RUST_LOG=info
+Environment=POLYMARKET_LOG_LEVEL=info
+Environment=POLYMARKET_CACHE_ENABLED=true
+Environment=POLYMARKET_CACHE_TTL=60
+EnvironmentFile=-/etc/polymarket-mcp/.env
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/polymarket-mcp
+ReadOnlyPaths=/etc/polymarket-mcp
+RuntimeDirectory=polymarket-mcp
+RuntimeDirectoryMode=0755
+LogsDirectory=polymarket-mcp
+LogsDirectoryMode=0755
+
+# Resource limits
+LimitNOFILE=8192
+MemoryHigh=512M
+MemoryMax=1G
+TasksMax=4096
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=polymarket-mcp
+
+[Install]
+WantedBy=multi-user.target
