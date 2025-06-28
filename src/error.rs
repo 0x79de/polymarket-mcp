@@ -26,25 +26,25 @@ impl fmt::Display for RequestId {
 #[derive(Debug, thiserror::Error)]
 pub enum PolymarketError {
     #[error("API request failed: {message} (request_id: {request_id})")]
-    ApiError {
+    Api {
         message: String,
         status_code: Option<u16>,
         request_id: RequestId,
     },
 
     #[error("Network error: {message}")]
-    NetworkError { message: String },
+    Network { message: String },
 
     #[error("Deserialization error: {message}")]
-    DeserializationError { message: String },
+    Deserialization { message: String },
 
     #[error("Configuration error: {message}")]
-    ConfigError { message: String },
+    Config { message: String },
 }
 
 impl PolymarketError {
     pub fn api_error(message: impl Into<String>, status_code: Option<u16>) -> Self {
-        Self::ApiError {
+        Self::Api {
             message: message.into(),
             status_code,
             request_id: RequestId::new(),
@@ -52,19 +52,19 @@ impl PolymarketError {
     }
 
     pub fn network_error(message: impl Into<String>) -> Self {
-        Self::NetworkError {
+        Self::Network {
             message: message.into(),
         }
     }
 
     pub fn deserialization_error(message: impl Into<String>) -> Self {
-        Self::DeserializationError {
+        Self::Deserialization {
             message: message.into(),
         }
     }
 
     pub fn config_error(message: impl Into<String>) -> Self {
-        Self::ConfigError {
+        Self::Config {
             message: message.into(),
         }
     }
