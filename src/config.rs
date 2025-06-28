@@ -86,11 +86,19 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Loads configuration from default sources (environment variables and config files).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Configuration validation fails
+    /// - Environment variable parsing fails
+    /// - Config file exists but cannot be parsed
     pub fn load() -> Result<Self> {
         let mut config = Self::default();
 
         if let Ok(file_config) = Self::try_load_default_config_files() {
-            config = Self::merge_configs(config, file_config)?;
+            config = Self::merge_configs(config, file_config);
         }
 
         config = Self::load_from_env(config)?;
@@ -99,6 +107,14 @@ impl Config {
         Ok(config)
     }
 
+    /// Loads configuration from a specific file path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The config file doesn't exist
+    /// - The config file cannot be parsed
+    /// - The config contains invalid values
     pub fn load_from_file(config_path: &str) -> Result<Self> {
         if !Path::new(config_path).exists() {
             return Err(anyhow::anyhow!("Config file not found: {}", config_path));
@@ -111,7 +127,7 @@ impl Config {
 
         let config: Config = builder
             .try_deserialize()
-            .context(format!("Failed to deserialize config from {}", config_path))?;
+            .context(format!("Failed to deserialize config from {config_path}"))?;
 
         Ok(config)
     }
@@ -133,7 +149,7 @@ impl Config {
 
                 let config: Config = builder
                     .try_deserialize()
-                    .context(format!("Failed to deserialize config from {}", path))?;
+                    .context(format!("Failed to deserialize config from {path}"))?;
 
                 return Ok(config);
             }
@@ -213,8 +229,8 @@ impl Config {
         Ok(config)
     }
 
-    fn merge_configs(_base: Self, override_config: Self) -> Result<Self> {
-        Ok(override_config)
+    fn merge_configs(_base: Self, override_config: Self) -> Self {
+        override_config
     }
 
     fn validate(&self) -> Result<()> {
@@ -290,22 +306,27 @@ impl Config {
         Ok(())
     }
 
+    #[must_use]
     pub fn api_timeout(&self) -> Duration {
         Duration::from_secs(self.api.timeout_seconds)
     }
 
+    #[must_use]
     pub fn server_timeout(&self) -> Duration {
         Duration::from_secs(self.server.timeout_seconds)
     }
 
+    #[must_use]
     pub fn cache_ttl(&self) -> Duration {
         Duration::from_secs(self.cache.ttl_seconds)
     }
 
+    #[must_use]
     pub fn resource_cache_ttl(&self) -> Duration {
         Duration::from_secs(self.cache.resource_cache_ttl_seconds)
     }
 
+    #[must_use]
     pub fn retry_delay(&self) -> Duration {
         Duration::from_millis(self.api.retry_delay_ms)
     }

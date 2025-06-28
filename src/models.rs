@@ -216,59 +216,60 @@ impl Default for MarketsQueryParams {
 }
 
 impl MarketsQueryParams {
+    #[must_use]
     pub fn to_query_string(&self) -> String {
         let mut params = Vec::new();
 
         if let Some(limit) = self.limit {
-            params.push(format!("limit={}", limit));
+            params.push(format!("limit={limit}"));
         }
         if let Some(offset) = self.offset {
-            params.push(format!("offset={}", offset));
+            params.push(format!("offset={offset}"));
         }
         if let Some(ref order) = self.order {
-            params.push(format!("order={}", order));
+            params.push(format!("order={order}"));
         }
         if let Some(ascending) = self.ascending {
-            params.push(format!("ascending={}", ascending));
+            params.push(format!("ascending={ascending}"));
         }
         if let Some(active) = self.active {
-            params.push(format!("active={}", active));
+            params.push(format!("active={active}"));
         }
         if let Some(closed) = self.closed {
-            params.push(format!("closed={}", closed));
+            params.push(format!("closed={closed}"));
         }
         if let Some(archived) = self.archived {
-            params.push(format!("archived={}", archived));
+            params.push(format!("archived={archived}"));
         }
         if let Some(liquidity_min) = self.liquidity_num_min {
-            params.push(format!("liquidity_num_min={}", liquidity_min));
+            params.push(format!("liquidity_num_min={liquidity_min}"));
         }
         if let Some(liquidity_max) = self.liquidity_num_max {
-            params.push(format!("liquidity_num_max={}", liquidity_max));
+            params.push(format!("liquidity_num_max={liquidity_max}"));
         }
         if let Some(volume_min) = self.volume_num_min {
-            params.push(format!("volume_num_min={}", volume_min));
+            params.push(format!("volume_num_min={volume_min}"));
         }
         if let Some(volume_max) = self.volume_num_max {
-            params.push(format!("volume_num_max={}", volume_max));
+            params.push(format!("volume_num_max={volume_max}"));
         }
         if let Some(ref start_min) = self.start_date_min {
-            params.push(format!("start_date_min={}", start_min));
+            params.push(format!("start_date_min={start_min}"));
         }
         if let Some(ref start_max) = self.start_date_max {
-            params.push(format!("start_date_max={}", start_max));
+            params.push(format!("start_date_max={start_max}"));
         }
         if let Some(ref end_min) = self.end_date_min {
-            params.push(format!("end_date_min={}", end_min));
+            params.push(format!("end_date_min={end_min}"));
         }
         if let Some(ref end_max) = self.end_date_max {
-            params.push(format!("end_date_max={}", end_max));
+            params.push(format!("end_date_max={end_max}"));
         }
         if let Some(ref tag_id) = self.tag_id {
-            params.push(format!("tag_id={}", tag_id));
+            params.push(format!("tag_id={tag_id}"));
         }
         if let Some(related_tags) = self.related_tags {
-            params.push(format!("related_tags={}", related_tags));
+            params.push(format!("related_tags={related_tags}"));
         }
 
         if params.is_empty() {

@@ -46,8 +46,9 @@ impl PolymarketClient {
 
         let client_builder = if let Some(ref api_key) = config.api.api_key {
             let mut headers = reqwest::header::HeaderMap::new();
-            let auth_value = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key))
-                .map_err(|e| PolymarketError::config_error(format!("Invalid API key: {}", e)))?;
+            let auth_value =
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {api_key}"))
+                    .map_err(|e| PolymarketError::config_error(format!("Invalid API key: {e}")))?;
             headers.insert(reqwest::header::AUTHORIZATION, auth_value);
             client_builder.default_headers(headers)
         } else {
@@ -55,7 +56,7 @@ impl PolymarketClient {
         };
 
         let client = client_builder.build().map_err(|e| {
-            PolymarketError::config_error(format!("Failed to build HTTP client: {}", e))
+            PolymarketError::config_error(format!("Failed to build HTTP client: {e}"))
         })?;
 
         Ok(Self {
@@ -87,14 +88,13 @@ impl PolymarketClient {
                                 Ok(data) => return Ok(data),
                                 Err(e) => {
                                     last_error = Some(PolymarketError::deserialization_error(
-                                        format!("JSON parsing error: {}", e),
+                                        format!("JSON parsing error: {e}"),
                                     ));
                                 }
                             },
                             Err(e) => {
                                 last_error = Some(PolymarketError::network_error(format!(
-                                    "Response reading error: {}",
-                                    e
+                                    "Response reading error: {e}"
                                 )));
                             }
                         }
@@ -107,7 +107,7 @@ impl PolymarketClient {
                         }
 
                         last_error = Some(PolymarketError::api_error(
-                            format!("HTTP error: {}", text),
+                            format!("HTTP error: {text}"),
                             Some(status.as_u16()),
                         ));
                     }
@@ -120,8 +120,7 @@ impl PolymarketClient {
                     }
 
                     last_error = Some(PolymarketError::network_error(format!(
-                        "Request error: {}",
-                        e
+                        "Request error: {e}"
                     )));
                 }
             }
@@ -134,8 +133,8 @@ impl PolymarketClient {
                     1 << attempt
                 };
                 let jitter = fastrand::f64() * 0.1;
-                let delay_ms = (base_delay.as_millis() as f64
-                    * backoff_multiplier as f64
+                let delay_ms = (f64::from(base_delay.as_millis() as u32)
+                    * f64::from(backoff_multiplier)
                     * (1.0 + jitter)) as u64;
                 let delay = Duration::from_millis(delay_ms.min(30000));
 
@@ -148,14 +147,21 @@ impl PolymarketClient {
         Err(error)
     }
 
+    /// Fetches markets from the Polymarket API with optional filtering parameters.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The API request fails
+    /// - The response cannot be deserialized
+    /// - Query parameters cannot be serialized
     pub async fn get_markets(&self, params: Option<MarketsQueryParams>) -> Result<Vec<Market>> {
         let query_params = params.unwrap_or_default();
         let cache_key = format!(
             "markets_{}",
             serde_json::to_string(&query_params).map_err(|e| {
                 PolymarketError::deserialization_error(format!(
-                    "Failed to serialize query params: {}",
-                    e
+                    "Failed to serialize query params: {e}"
                 ))
             })?
         );
@@ -181,6 +187,14 @@ impl PolymarketClient {
         Ok(response)
     }
 
+    /// Fetches a specific market by its ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The API request fails
+    /// - The market is not found
+    /// - The response cannot be deserialized
     pub async fn get_market_by_id(&self, market_id: &str) -> Result<Market> {
         let cache_key = market_id.to_string();
 
@@ -204,6 +218,13 @@ impl PolymarketClient {
         Ok(market)
     }
 
+    /// Searches for markets containing the specified keyword in question, description, or category.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The underlying API request fails
+    /// - The response cannot be deserialized
     pub async fn search_markets(&self, keyword: &str, limit: Option<u32>) -> Result<Vec<Market>> {
         let params = MarketsQueryParams {
             limit: limit.or(Some(20)),
@@ -231,6 +252,13 @@ impl PolymarketClient {
         Ok(filtered)
     }
 
+    /// Gets current prices for all outcomes of a specific market.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The market cannot be fetched
+    /// - Price data is malformed
     pub async fn get_market_prices(&self, market_id: &str) -> Result<Vec<MarketPrice>> {
         let market = self.get_market_by_id(market_id).await?;
         let mut prices = Vec::new();
@@ -240,7 +268,7 @@ impl PolymarketClient {
                 if let Ok(price) = price_str.parse::<f64>() {
                     prices.push(MarketPrice {
                         market_id: market_id.to_string(),
-                        outcome_id: format!("outcome_{}", i),
+                        outcome_id: format!("outcome_{i}"),
                         price,
                         timestamp: chrono::Utc::now().to_rfc3339(),
                     });
@@ -251,6 +279,13 @@ impl PolymarketClient {
         Ok(prices)
     }
 
+    /// Gets markets with the highest trading volume, sorted by volume descending.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The API request fails
+    /// - The response cannot be deserialized
     pub async fn get_trending_markets(&self, limit: Option<u32>) -> Result<Vec<Market>> {
         let params = MarketsQueryParams {
             limit: limit.or(Some(10)),
@@ -263,6 +298,13 @@ impl PolymarketClient {
         self.get_markets(Some(params)).await
     }
 
+    /// Gets currently active (not archived) markets.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The API request fails
+    /// - The response cannot be deserialized
     pub async fn get_active_markets(&self, limit: Option<u32>) -> Result<Vec<Market>> {
         let params = MarketsQueryParams {
             limit: limit.or(Some(50)),

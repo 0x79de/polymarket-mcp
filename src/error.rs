@@ -6,6 +6,7 @@ use tracing::error;
 pub struct RequestId(pub String);
 
 impl RequestId {
+    #[must_use]
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
