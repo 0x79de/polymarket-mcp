@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::Path;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::warn;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -87,61 +87,62 @@ impl Default for Config {
 
 impl Config {
     pub fn load() -> Result<Self> {
-        info!("Loading configuration...");
-        
-        // Start with default configuration
         let mut config = Self::default();
-        
-        // Try to load from config file if it exists
-        if let Ok(file_config) = Self::load_from_file() {
+
+        if let Ok(file_config) = Self::try_load_default_config_files() {
             config = Self::merge_configs(config, file_config)?;
-            info!("Configuration loaded from file");
-        } else {
-            debug!("No config file found, using defaults");
         }
-        
-        // Override with environment variables
+
         config = Self::load_from_env(config)?;
-        
-        // Validate configuration
         config.validate()?;
-        
-        info!("Configuration loaded successfully");
-        debug!("Final configuration: {:#?}", config);
-        
+
         Ok(config)
     }
-    
-    fn load_from_file() -> Result<Self> {
+
+    pub fn load_from_file(config_path: &str) -> Result<Self> {
+        if !Path::new(config_path).exists() {
+            return Err(anyhow::anyhow!("Config file not found: {}", config_path));
+        }
+
+        let builder = ConfigBuilder::builder()
+            .add_source(File::with_name(config_path).required(true))
+            .build()
+            .context("Failed to build config from file")?;
+
+        let config: Config = builder
+            .try_deserialize()
+            .context(format!("Failed to deserialize config from {}", config_path))?;
+
+        Ok(config)
+    }
+
+    fn try_load_default_config_files() -> Result<Self> {
         let config_paths = [
             "config.toml",
             "polymarket-mcp.toml",
             "/etc/polymarket-mcp/config.toml",
             "~/.config/polymarket-mcp/config.toml",
         ];
-        
+
         for path in &config_paths {
             if Path::new(path).exists() {
-                debug!("Loading config from: {}", path);
-                
                 let builder = ConfigBuilder::builder()
                     .add_source(File::with_name(path).required(false))
                     .build()
                     .context("Failed to build config from file")?;
-                
-                let config: Config = builder.try_deserialize()
+
+                let config: Config = builder
+                    .try_deserialize()
                     .context(format!("Failed to deserialize config from {}", path))?;
-                
+
                 return Ok(config);
             }
         }
-        
+
         Err(anyhow::anyhow!("No config file found"))
     }
-    
+
     fn load_from_env(mut config: Self) -> Result<Self> {
-        debug!("Loading configuration from environment variables");
-        
         // Server configuration
         if let Ok(val) = env::var("POLYMARKET_SERVER_NAME") {
             config.server.name = val;
@@ -152,7 +153,7 @@ impl Config {
         if let Ok(val) = env::var("POLYMARKET_SERVER_TIMEOUT") {
             config.server.timeout_seconds = val.parse().context("Invalid server timeout")?;
         }
-        
+
         // API configuration
         if let Ok(val) = env::var("POLYMARKET_API_BASE_URL") {
             config.api.base_url = val;
@@ -172,7 +173,7 @@ impl Config {
         if let Ok(val) = env::var("POLYMARKET_API_RATE_LIMIT") {
             config.api.rate_limit_per_second = Some(val.parse().context("Invalid rate_limit")?);
         }
-        
+
         // Cache configuration
         if let Ok(val) = env::var("POLYMARKET_CACHE_ENABLED") {
             config.cache.enabled = val.parse().context("Invalid cache_enabled")?;
@@ -184,9 +185,10 @@ impl Config {
             config.cache.max_entries = val.parse().context("Invalid cache_max_entries")?;
         }
         if let Ok(val) = env::var("POLYMARKET_RESOURCE_CACHE_TTL") {
-            config.cache.resource_cache_ttl_seconds = val.parse().context("Invalid resource_cache_ttl")?;
+            config.cache.resource_cache_ttl_seconds =
+                val.parse().context("Invalid resource_cache_ttl")?;
         }
-        
+
         // Logging configuration
         if let Ok(val) = env::var("POLYMARKET_LOG_LEVEL") {
             config.logging.level = val;
@@ -203,57 +205,63 @@ impl Config {
         if let Ok(val) = env::var("POLYMARKET_LOG_FILE_PATH") {
             config.logging.log_file_path = Some(val);
         }
-        
-        // Also support RUST_LOG for logging level
+
         if let Ok(val) = env::var("RUST_LOG") {
             config.logging.level = val;
         }
-        
+
         Ok(config)
     }
-    
+
     fn merge_configs(_base: Self, override_config: Self) -> Result<Self> {
-        // For simplicity, we'll just use the override config
-        // In a more sophisticated implementation, you might merge field by field
         Ok(override_config)
     }
-    
+
     fn validate(&self) -> Result<()> {
         // Validate server configuration
         if self.server.name.is_empty() {
             return Err(anyhow::anyhow!("Server name cannot be empty"));
         }
-        
+
         if self.server.timeout_seconds == 0 {
             return Err(anyhow::anyhow!("Server timeout must be greater than 0"));
         }
-        
+
         // Validate API configuration
         if self.api.base_url.is_empty() {
             return Err(anyhow::anyhow!("API base URL cannot be empty"));
         }
-        
+
         if !self.api.base_url.starts_with("http://") && !self.api.base_url.starts_with("https://") {
-            return Err(anyhow::anyhow!("API base URL must start with http:// or https://"));
+            return Err(anyhow::anyhow!(
+                "API base URL must start with http:// or https://"
+            ));
         }
-        
+
         if self.api.timeout_seconds == 0 {
             return Err(anyhow::anyhow!("API timeout must be greater than 0"));
         }
-        
+
         if self.api.max_retries > 10 {
-            warn!("API max_retries is very high ({}), consider reducing it", self.api.max_retries);
+            warn!(
+                "API max_retries is very high ({}), consider reducing it",
+                self.api.max_retries
+            );
         }
-        
+
         // Validate cache configuration
         if self.cache.ttl_seconds == 0 && self.cache.enabled {
-            return Err(anyhow::anyhow!("Cache TTL must be greater than 0 when cache is enabled"));
+            return Err(anyhow::anyhow!(
+                "Cache TTL must be greater than 0 when cache is enabled"
+            ));
         }
-        
+
         if self.cache.max_entries == 0 && self.cache.enabled {
-            return Err(anyhow::anyhow!("Cache max_entries must be greater than 0 when cache is enabled"));
+            return Err(anyhow::anyhow!(
+                "Cache max_entries must be greater than 0 when cache is enabled"
+            ));
         }
-        
+
         // Validate logging configuration
         let valid_levels = ["trace", "debug", "info", "warn", "error"];
         if !valid_levels.contains(&self.logging.level.as_str()) {
@@ -263,7 +271,7 @@ impl Config {
                 valid_levels.join(", ")
             ));
         }
-        
+
         let valid_formats = ["pretty", "json", "compact"];
         if !valid_formats.contains(&self.logging.format.as_str()) {
             return Err(anyhow::anyhow!(
@@ -272,44 +280,33 @@ impl Config {
                 valid_formats.join(", ")
             ));
         }
-        
+
         if self.logging.log_to_file && self.logging.log_file_path.is_none() {
-            return Err(anyhow::anyhow!("Log file path must be specified when log_to_file is true"));
+            return Err(anyhow::anyhow!(
+                "Log file path must be specified when log_to_file is true"
+            ));
         }
-        
+
         Ok(())
     }
-    
+
     pub fn api_timeout(&self) -> Duration {
         Duration::from_secs(self.api.timeout_seconds)
     }
-    
+
     pub fn server_timeout(&self) -> Duration {
         Duration::from_secs(self.server.timeout_seconds)
     }
-    
+
     pub fn cache_ttl(&self) -> Duration {
         Duration::from_secs(self.cache.ttl_seconds)
     }
-    
+
     pub fn resource_cache_ttl(&self) -> Duration {
         Duration::from_secs(self.cache.resource_cache_ttl_seconds)
     }
-    
+
     pub fn retry_delay(&self) -> Duration {
         Duration::from_millis(self.api.retry_delay_ms)
-    }
-    
-    pub fn print_summary(&self) {
-        info!("=== {} v{} ===", self.server.name, self.server.version);
-        info!("Description: {}", self.server.description);
-        info!("API URL: {}", self.api.base_url);
-        info!("Cache enabled: {}", self.cache.enabled);
-        info!("Log level: {}", self.logging.level);
-        if let Some(ref api_key) = self.api.api_key {
-            info!("API key: {}***", &api_key[..std::cmp::min(4, api_key.len())]);
-        } else {
-            info!("API key: Not configured");
-        }
     }
 }

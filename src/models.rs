@@ -9,25 +9,28 @@ pub struct Market {
     pub description: Option<String>,
     pub active: bool,
     pub closed: bool,
-    
+
     // Polymarket returns these as strings, we'll parse them
     #[serde(deserialize_with = "deserialize_string_to_f64")]
     pub liquidity: f64,
     #[serde(deserialize_with = "deserialize_string_to_f64")]
     pub volume: f64,
-    
+
     #[serde(rename = "endDate")]
     pub end_date: String,
-    
+
     pub image: Option<String>,
     pub category: Option<String>,
-    
+
     // These are JSON strings in the API
     #[serde(deserialize_with = "deserialize_json_string_to_vec")]
     pub outcomes: Vec<String>,
-    #[serde(rename = "outcomePrices", deserialize_with = "deserialize_json_string_to_vec")]
+    #[serde(
+        rename = "outcomePrices",
+        deserialize_with = "deserialize_json_string_to_vec"
+    )]
     pub outcome_prices: Vec<String>,
-    
+
     #[serde(rename = "conditionId")]
     pub condition_id: Option<String>,
     #[serde(rename = "marketType")]
@@ -35,14 +38,18 @@ pub struct Market {
     #[serde(rename = "twitterCardImage")]
     pub twitter_card_image: Option<String>,
     pub icon: Option<String>,
-    
+
     // Optional fields that might not always be present
     #[serde(rename = "startDate")]
     pub start_date: Option<String>,
-    #[serde(rename = "volume24hr", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "volume24hr",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub volume_24hr: Option<f64>,
     pub events: Option<Vec<Event>>,
-    
+
     // Additional optional fields that might be present
     #[serde(default)]
     pub archived: Option<bool>,
@@ -50,10 +57,9 @@ pub struct Market {
     pub enable_order_book: Option<bool>,
     #[serde(rename = "groupItemTitle", default)]
     pub group_item_title: Option<String>,
-    #[serde(rename = "groupItemSlug", default)]  
+    #[serde(rename = "groupItemSlug", default)]
     pub group_item_slug: Option<String>,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketPrice {
@@ -62,7 +68,6 @@ pub struct MarketPrice {
     pub price: f64,
     pub timestamp: String,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
@@ -77,9 +82,12 @@ pub struct Event {
     pub image: Option<String>,
     #[serde(default)]
     pub active: Option<bool>,
-    #[serde(deserialize_with = "deserialize_optional_string_or_number_to_f64", default)]
+    #[serde(
+        deserialize_with = "deserialize_optional_string_or_number_to_f64",
+        default
+    )]
     pub volume: Option<f64>,
-    
+
     // Additional fields that might be present
     #[serde(default)]
     pub slug: Option<String>,
@@ -210,7 +218,7 @@ impl Default for MarketsQueryParams {
 impl MarketsQueryParams {
     pub fn to_query_string(&self) -> String {
         let mut params = Vec::new();
-        
+
         if let Some(limit) = self.limit {
             params.push(format!("limit={}", limit));
         }
@@ -262,7 +270,7 @@ impl MarketsQueryParams {
         if let Some(related_tags) = self.related_tags {
             params.push(format!("related_tags={}", related_tags));
         }
-        
+
         if params.is_empty() {
             String::new()
         } else {
@@ -327,7 +335,7 @@ impl ResourceCache {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Self {
             data,
             timestamp: now,
@@ -340,7 +348,7 @@ impl ResourceCache {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         now > self.expires_at
     }
 }
@@ -354,7 +362,6 @@ where
     s.parse::<f64>().map_err(serde::de::Error::custom)
 }
 
-
 fn deserialize_json_string_to_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
@@ -363,7 +370,9 @@ where
     serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
-fn deserialize_optional_string_or_number_to_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+fn deserialize_optional_string_or_number_to_f64<'de, D>(
+    deserializer: D,
+) -> Result<Option<f64>, D::Error>
 where
     D: Deserializer<'de>,
 {

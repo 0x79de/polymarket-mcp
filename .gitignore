@@ -1,29 +1,72 @@
 # Rust
 /target/
-Cargo.lock
+**/*.rs.bk
+*.pdb
 
-# IDE
+# IDE and editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.helix/
 
-# OS
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Environment variables
+# Environment and configuration
 .env
 .env.local
+.env.*.local
+config.toml
 
-# Logs
+# Logs and runtime
 *.log
+logs/
+errors/
+*.pid
+*.sock
 
-# Editor backups
-*~
+# Testing and coverage
+test-results/
+coverage/
+tarpaulin-report.html
 
+# Backup and temporary files
+*.bak
+*.backup
+*.orig
+*.tmp
+tmp/
+temp/
+.cache/
 
-API_NOTES.md
+# Development artifacts
+perf.data*
+callgrind.*
+massif.*
+
+# Release artifacts (optional - uncomment if you don't want to track releases)
+# *.tar.gz
+# *.zip
+
+# Documentation (generated)
+/book/
+/target/doc/
+
+# Security sensitive (never commit these)
+private/
+secrets/
+keys/
+certs/
+*.pem
+*.key
+*.crt
+
 CLAUDE.md
-
-.env
