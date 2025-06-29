@@ -44,7 +44,7 @@ A high-performance Model Context Protocol (MCP) server for Polymarket prediction
    {
      "mcpServers": {
        "polymarket": {
-         "command": "/Users/0x79de/dev/polymarket-mcp/target/release/polymarket-mcp",
+         "command": "/path/to/polymarket-mcp/target/release/polymarket-mcp",
          "env": {
            "RUST_LOG": "info"
          }
