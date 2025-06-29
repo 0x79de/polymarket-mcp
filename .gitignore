@@ -70,3 +70,4 @@ certs/
 *.crt
 
 CLAUDE.md
+API_NOTES.md

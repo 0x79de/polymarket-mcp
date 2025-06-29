@@ -1,0 +1,30 @@
+# Polymarket MCP Server Configuration
+# Example configuration file in TOML format
+
+[server]
+name = "Polymarket MCP Server"
+version = "0.1.0"
+description = "MCP server for Polymarket prediction market data"
+max_connections = 100
+timeout_seconds = 30
+
+[api]
+base_url = "https://gamma-api.polymarket.com"
+# api_key = "your_api_key_here"  # Optional - uncomment if you have an API key
+timeout_seconds = 30
+max_retries = 3
+retry_delay_ms = 100
+rate_limit_per_second = 10
+
+[cache]
+enabled = true
+ttl_seconds = 60
+max_entries = 1000
+resource_cache_ttl_seconds = 300
+
+[logging]
+level = "info"
+format = "pretty"  # Options: "pretty", "json", "compact"
+enable_colors = true
+log_to_file = false
+# log_file_path = "/var/log/polymarket-mcp.log"  # Uncomment if log_to_file = true
