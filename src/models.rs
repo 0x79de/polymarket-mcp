@@ -59,7 +59,7 @@ pub struct Market {
     pub group_item_title: Option<String>,
     #[serde(rename = "groupItemSlug", default)]
     pub group_item_slug: Option<String>,
-    
+
     // Additional fields from Gamma API
     #[serde(rename = "acceptingOrders", default)]
     pub accepting_orders: Option<bool>,
@@ -88,12 +88,12 @@ impl Market {
     /// Check if market is currently tradeable
     #[allow(dead_code)]
     pub fn is_tradeable(&self) -> bool {
-        self.active 
-            && !self.closed 
+        self.active
+            && !self.closed
             && !self.archived.unwrap_or(false)
             && self.enable_order_book.unwrap_or(false)
     }
-    
+
     /// Get activity level based on volume and liquidity
     #[allow(dead_code)]
     pub fn activity_level(&self) -> ActivityLevel {
@@ -105,7 +105,7 @@ impl Market {
             _ => ActivityLevel::Low,
         }
     }
-    
+
     /// Check if market expires soon (within 24 hours) - requires parsing end_date
     #[allow(dead_code)]
     pub fn expires_soon(&self) -> bool {
@@ -486,28 +486,28 @@ pub struct MarketSummary {
 pub enum PolymarketError {
     #[error("HTTP request failed: {0}")]
     HttpError(#[from] reqwest::Error),
-    
+
     #[error("JSON parsing failed: {0}")]
     JsonError(#[from] serde_json::Error),
-    
+
     #[error("API returned error: {status} - {message}")]
     ApiError { status: u16, message: String },
-    
+
     #[error("Market not found: {market_id}")]
     MarketNotFound { market_id: String },
-    
+
     #[error("Invalid market state: {reason}")]
     InvalidMarketState { reason: String },
-    
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("Authentication failed")]
     AuthenticationFailed,
-    
+
     #[error("Configuration error: {0}")]
     ConfigError(String),
-    
+
     #[error("Cache error: {0}")]
     CacheError(String),
 }
@@ -528,9 +528,9 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            market_data_ttl_seconds: 900,  // 15 minutes
-            price_data_ttl_seconds: 60,    // 1 minute
-            stats_ttl_seconds: 300,        // 5 minutes
+            market_data_ttl_seconds: 900, // 15 minutes
+            price_data_ttl_seconds: 60,   // 1 minute
+            stats_ttl_seconds: 300,       // 5 minutes
             max_cache_size: 10000,
         }
     }

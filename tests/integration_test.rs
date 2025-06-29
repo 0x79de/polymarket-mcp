@@ -6,10 +6,16 @@ use std::sync::Arc;
 async fn test_config_loading() {
     let config = Config::load();
     assert!(config.is_ok(), "Config should load successfully");
-    
+
     let config = config.unwrap();
-    assert!(!config.server.name.is_empty(), "Server name should not be empty");
-    assert!(!config.api.base_url.is_empty(), "API base URL should not be empty");
+    assert!(
+        !config.server.name.is_empty(),
+        "Server name should not be empty"
+    );
+    assert!(
+        !config.api.base_url.is_empty(),
+        "API base URL should not be empty"
+    );
 }
 
 #[tokio::test]
@@ -22,19 +28,31 @@ async fn test_client_creation() {
 #[test]
 fn test_config_structure() {
     let config = Config::default();
-    
+
     // Test that default config has expected values
-    assert!(!config.server.name.is_empty(), "Default server name should not be empty");
-    assert!(config.api.base_url.starts_with("https://"), "API URL should use HTTPS");
-    assert!(config.api.timeout_seconds > 0, "API timeout should be positive");
-    assert!(config.server.timeout_seconds > 0, "Server timeout should be positive");
+    assert!(
+        !config.server.name.is_empty(),
+        "Default server name should not be empty"
+    );
+    assert!(
+        config.api.base_url.starts_with("https://"),
+        "API URL should use HTTPS"
+    );
+    assert!(
+        config.api.timeout_seconds > 0,
+        "API timeout should be positive"
+    );
+    assert!(
+        config.server.timeout_seconds > 0,
+        "Server timeout should be positive"
+    );
     assert!(config.cache.ttl_seconds > 0, "Cache TTL should be positive");
 }
 
 #[test]
 fn test_market_structure() {
     use polymarket_mcp::Market;
-    
+
     // Test that Market can be serialized to JSON
     let market = Market {
         id: "test-id".to_string(),
@@ -73,11 +91,11 @@ fn test_market_structure() {
         notifications_enabled: Some(true),
         tags: None,
     };
-    
+
     // Test basic serialization
     let json_result = serde_json::to_string(&market);
     assert!(json_result.is_ok(), "Market should serialize to JSON");
-    
+
     // Test struct accessors
     assert_eq!(market.id, "test-id");
     assert_eq!(market.question, "Test question?");
@@ -90,55 +108,82 @@ fn test_market_structure() {
 #[test]
 fn test_market_query_params() {
     use polymarket_mcp::MarketsQueryParams;
-    
+
     let params = MarketsQueryParams::default();
     let query_string = params.to_query_string();
-    
+
     // Should generate a non-empty query string with default values
-    assert!(!query_string.is_empty(), "Default params should generate query string");
-    assert!(query_string.starts_with('?'), "Query string should start with ?");
-    assert!(query_string.contains("limit="), "Should contain limit parameter");
-    assert!(query_string.contains("active=true"), "Should contain active=true");
+    assert!(
+        !query_string.is_empty(),
+        "Default params should generate query string"
+    );
+    assert!(
+        query_string.starts_with('?'),
+        "Query string should start with ?"
+    );
+    assert!(
+        query_string.contains("limit="),
+        "Should contain limit parameter"
+    );
+    assert!(
+        query_string.contains("active=true"),
+        "Should contain active=true"
+    );
 }
 
 #[test]
 fn test_error_types() {
     use polymarket_mcp::{PolymarketError, RequestId};
-    
+
     // Test error creation
     let api_error = PolymarketError::api_error("Test error", Some(404));
-    assert!(api_error.to_string().contains("Test error"), "Error should contain message");
-    
+    assert!(
+        api_error.to_string().contains("Test error"),
+        "Error should contain message"
+    );
+
     let network_error = PolymarketError::network_error("Network issue");
-    assert!(network_error.to_string().contains("Network issue"), "Error should contain message");
-    
+    assert!(
+        network_error.to_string().contains("Network issue"),
+        "Error should contain message"
+    );
+
     let config_error = PolymarketError::config_error("Config problem");
-    assert!(config_error.to_string().contains("Config problem"), "Error should contain message");
-    
+    assert!(
+        config_error.to_string().contains("Config problem"),
+        "Error should contain message"
+    );
+
     // Test RequestId
     let req_id = RequestId::new();
-    assert!(!req_id.to_string().is_empty(), "RequestId should generate UUID");
+    assert!(
+        !req_id.to_string().is_empty(),
+        "RequestId should generate UUID"
+    );
 }
 
 #[test]
 fn test_resource_cache() {
     use polymarket_mcp::ResourceCache;
-    
+
     let cache = ResourceCache::new("test data".to_string(), 60);
     assert!(!cache.is_expired(), "Fresh cache should not be expired");
     assert_eq!(cache.data, "test data", "Cache should store data correctly");
-    
+
     // Test with zero TTL (should be expired immediately)
     let expired_cache = ResourceCache::new("test".to_string(), 0);
     // Note: Due to timing, this might not always be expired immediately
     // so we just check the structure is correct
-    assert_eq!(expired_cache.data, "test", "Cache should store data correctly");
+    assert_eq!(
+        expired_cache.data, "test",
+        "Cache should store data correctly"
+    );
 }
 
 #[cfg(test)]
 mod mcp_protocol_tests {
     use super::*;
-    
+
     #[test]
     fn test_mcp_initialize_response() {
         // Test that we can create a proper MCP initialize response
@@ -154,13 +199,22 @@ mod mcp_protocol_tests {
                 "version": "0.1.0"
             }
         });
-        
+
         assert!(response.is_object(), "Response should be a JSON object");
-        assert!(response.get("protocolVersion").is_some(), "Should have protocol version");
-        assert!(response.get("capabilities").is_some(), "Should have capabilities");
-        assert!(response.get("serverInfo").is_some(), "Should have server info");
+        assert!(
+            response.get("protocolVersion").is_some(),
+            "Should have protocol version"
+        );
+        assert!(
+            response.get("capabilities").is_some(),
+            "Should have capabilities"
+        );
+        assert!(
+            response.get("serverInfo").is_some(),
+            "Should have server info"
+        );
     }
-    
+
     #[test]
     fn test_mcp_tools_list_response() {
         // Test that we can create a proper tools list response
@@ -181,8 +235,11 @@ mod mcp_protocol_tests {
                 }
             ]
         });
-        
+
         assert!(tools.get("tools").is_some(), "Should have tools array");
-        assert!(tools.get("tools").unwrap().is_array(), "Tools should be an array");
+        assert!(
+            tools.get("tools").unwrap().is_array(),
+            "Tools should be an array"
+        );
     }
 }
