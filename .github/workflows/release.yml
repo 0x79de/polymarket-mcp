@@ -8,6 +8,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     name: Create Release
@@ -28,6 +31,7 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
+        token: ${{ secrets.GITHUB_TOKEN }}
 
   build-and-upload:
     name: Build and Upload
@@ -99,4 +103,5 @@ jobs:
       with:
         tag_name: ${{ github.ref_name }}
         files: ./${{ env.ASSET }}
+        token: ${{ secrets.GITHUB_TOKEN }}
 
