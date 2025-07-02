@@ -38,9 +38,6 @@ impl std::fmt::Debug for ApiConfig {
         f.debug_struct("ApiConfig")
             .field("base_url", &self.base_url)
             .field("api_key", &self.api_key.as_ref().map(|_| "[REDACTED]"))
-            .field("timeout_seconds", &self.timeout_seconds)
-            .field("max_retries", &self.max_retries)
-            .field("retry_delay_ms", &self.retry_delay_ms)
             .field("rate_limit_per_second", &self.rate_limit_per_second)
             .finish()
     }
