@@ -2,106 +2,199 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  create-release:
-    name: Create Release
+  release-please:
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release Please
+        id: release
+        uses: google-github-actions/release-please-action@v4
+        with:
+          release-type: rust
+          package-name: polymarket-mcp
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-  build-and-upload:
-    name: Build and Upload
-    needs: create-release
+  build:
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
-    
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            suffix: ''
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            suffix: ''
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            suffix: ''
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            suffix: ''
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            suffix: '.exe'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
-        
-    - name: Cache cargo
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.target }}-cargo-
-          
-    - name: Install musl tools
-      if: matrix.target == 'x86_64-unknown-linux-musl'
-      run: sudo apt-get update && sudo apt-get install -y musl-tools
-      
-    - name: Build release
-      run: cargo build --release --target ${{ matrix.target }}
-      
-    - name: Create archive
-      shell: bash
-      run: |
-        binary_name="polymarket-mcp${{ matrix.suffix }}"
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          cp "target/${{ matrix.target }}/release/${binary_name}" .
-          7z a "polymarket-mcp-${{ matrix.target }}.zip" "${binary_name}"
-          echo "ASSET=polymarket-mcp-${{ matrix.target }}.zip" >> $GITHUB_ENV
-        else
-          cp "target/${{ matrix.target }}/release/${binary_name}" .
-          tar -czf "polymarket-mcp-${{ matrix.target }}.tar.gz" "${binary_name}"
-          echo "ASSET=polymarket-mcp-${{ matrix.target }}.tar.gz" >> $GITHUB_ENV
-        fi
-        
-    - name: Upload Release Asset
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.ref_name }}
-        files: ./${{ env.ASSET }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: false
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            cross: false
 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup Cross (for musl)
+        if: matrix.cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Build binary (native)
+        if: "!matrix.cross"
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build binary (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Package binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          binary_name="polymarket-mcp"
+          cd target/${{ matrix.target }}/release
+          
+          # Strip binary for smaller size (except on macOS which doesn't support strip in this way)
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            strip $binary_name || true
+          fi
+          
+          tar -czf polymarket-mcp-${{ needs.release-please.outputs.version }}-${{ matrix.target }}.tar.gz $binary_name
+          echo "ASSET_PATH=target/${{ matrix.target }}/release/polymarket-mcp-${{ needs.release-please.outputs.version }}-${{ matrix.target }}.tar.gz" >> $GITHUB_ENV
+          echo "ASSET_NAME=polymarket-mcp-${{ needs.release-please.outputs.version }}-${{ matrix.target }}.tar.gz" >> $GITHUB_ENV
+
+      - name: Package binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a polymarket-mcp-${{ needs.release-please.outputs.version }}-${{ matrix.target }}.zip polymarket-mcp.exe
+          echo "ASSET_PATH=target/${{ matrix.target }}/release/polymarket-mcp-${{ needs.release-please.outputs.version }}-${{ matrix.target }}.zip" >> $env:GITHUB_ENV
+          echo "ASSET_NAME=polymarket-mcp-${{ needs.release-please.outputs.version }}-${{ matrix.target }}.zip" >> $env:GITHUB_ENV
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: ${{ env.ASSET_PATH }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=semver,pattern={{version}},value=${{ needs.release-please.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-please.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.release-please.outputs.version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  checksums:
+    name: Generate checksums
+    runs-on: ubuntu-latest
+    needs: [release-please, build]
+    if: ${{ needs.release-please.outputs.release_created }}
+    steps:
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.10
+        with:
+          repository: ${{ github.repository }}
+          tag: ${{ needs.release-please.outputs.tag_name }}
+          fileName: "*.tar.gz"
+          out-file-path: "downloads"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Windows assets
+        uses: robinraju/release-downloader@v1.10
+        with:
+          repository: ${{ github.repository }}
+          tag: ${{ needs.release-please.outputs.tag_name }}
+          fileName: "*.zip"
+          out-file-path: "downloads"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate checksums
+        run: |
+          cd downloads
+          sha256sum *.tar.gz *.zip > SHA256SUMS
+          
+      - name: Upload checksums
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: downloads/SHA256SUMS
+          token: ${{ secrets.GITHUB_TOKEN }}
