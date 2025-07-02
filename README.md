@@ -568,5 +568,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Archive
 
-- [Claude.Local](CLAUDE.local.md)
 - [Release Process](RELEASE_PROCESS.md)
