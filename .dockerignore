@@ -38,6 +38,6 @@ test_data/
 .gitlab-ci.yml
 
 # Docker
-Dockerfile*
+Dockerfile.?*
 docker-compose*.yml
 .dockerignore
