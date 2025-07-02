@@ -40,10 +40,11 @@ def update_readme():
         file_list += f"- [{display_name}]({file.name})\n"
     
     # Check if archive section exists
-    if "## Archive" in content:
+    # Use regex to find and replace the "## Archive" section
+    archive_pattern = re.compile(r"(## Archive\n\n.*?)(?=\n##|\Z)", re.DOTALL)
+    if archive_pattern.search(content):
         # Replace existing archive section
-        before_archive = content.split("## Archive")[0].rstrip()
-        content = before_archive + "\n\n" + file_list
+        content = archive_pattern.sub(file_list.rstrip(), content)
     else:
         # Add archive section at the end
         content = content.rstrip() + "\n\n" + file_list
