@@ -66,7 +66,52 @@ A high-performance Model Context Protocol (MCP) server for Polymarket prediction
 
 2. **Use the binary at** `target/release/polymarket-mcp` in your Claude Desktop configuration.
 
-#### Option 3: Install via Cargo
+#### Option 3: Docker Deployment
+
+1. **Build Docker image:**
+   ```bash
+   docker build -t polymarket-mcp:latest .
+   ```
+
+2. **Configure Claude Desktop for Docker:**
+   
+   Edit your Claude Desktop configuration file:
+   ```bash
+   # macOS
+   vim ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   
+   # Windows
+   notepad %APPDATA%\Claude\claude_desktop_config.json
+   
+   # Linux
+   nano ~/.config/Claude/claude_desktop_config.json
+   ```
+
+   Add the Docker configuration:
+   ```json
+   {
+     "mcpServers": {
+       "polymarket": {
+         "command": "docker",
+         "args": [
+           "run",
+           "-i",
+           "--rm",
+           "-e", "RUST_LOG=info",
+           "-e", "POLYMARKET_CACHE_TTL=300",
+           "polymarket-mcp:latest"
+         ],
+         "env": {
+           "RUST_LOG": "info"
+         }
+       }
+     }
+   }
+   ```
+
+3. **Restart Claude Desktop** to load the new MCP server.
+
+#### Option 4: Install via Cargo
 
 ```bash
 cargo install --git https://github.com/0x79de/polymarket-mcp
@@ -182,6 +227,10 @@ cargo test
 
 # Check code quality
 cargo clippy
+
+# Docker development
+docker build -t polymarket-mcp:latest .
+docker run -it --rm -e RUST_LOG=debug polymarket-mcp:latest
 
 # Test MCP protocol manually
 echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":0}' | cargo run
@@ -333,6 +382,44 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 ## Deployment
 
+### Docker Deployment
+
+#### Production Docker Compose
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+services:
+  polymarket-mcp:
+    build: .
+    image: polymarket-mcp:latest
+    container_name: polymarket-mcp
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
+      - POLYMARKET_CACHE_TTL=300
+      - POLYMARKET_MAX_CONCURRENT_REQUESTS=10
+    healthcheck:
+      test: ["CMD", "polymarket-mcp", "--health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+```bash
+# Deploy with docker-compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f polymarket-mcp
+
+# Update and restart
+docker-compose pull
+docker-compose up -d
+```
+
 ### Systemd Service (Linux)
 
 For Linux servers, create `/etc/systemd/system/polymarket-mcp.service`:
@@ -433,7 +520,7 @@ We welcome contributions! Please follow these steps:
    cargo fmt --check            # Code must be formatted
    cargo check                  # No compilation warnings
    ```
-4. **Submit a pull request** with a clear description
+4. **Submit a pull request** with [conventional commit messages](https://www.conventionalcommits.org/)
 
 ### Development Guidelines
 - **Zero warnings policy**: All code must compile without warnings
@@ -478,3 +565,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - MCP resources and prompts implementation
 - Comprehensive configuration system
 - Built-in caching and error handling
+
+## Archive
+
+- [Claude.Local](CLAUDE.local.md)
+- [Release Process](RELEASE_PROCESS.md)

@@ -381,13 +381,19 @@ async fn main() -> Result<()> {
                     Ok(_) => {
                         if let Ok(request) = serde_json::from_str::<serde_json::Value>(&line) {
                             if let Some(response) = handle_mcp_request(&server, request).await {
-                                let response_json = serde_json::to_string(&response).unwrap();
-                                if writer.write_all(response_json.as_bytes()).await.is_err() ||
-                                   writer.write_all(b"\n").await.is_err() ||
-                                   writer.flush().await.is_err() {
+                                if let Ok(response_json) = serde_json::to_string(&response) {
+                                    if writer.write_all(response_json.as_bytes()).await.is_err() ||
+                                       writer.write_all(b"\n").await.is_err() ||
+                                       writer.flush().await.is_err() {
+                                        break;
+                                    }
+                                } else {
+                                    tracing::error!("Failed to serialize JSON response");
                                     break;
                                 }
                             }
+                        } else {
+                            tracing::warn!("Failed to parse JSON request: {}", line.trim());
                         }
                     }
                     Err(_) => break,

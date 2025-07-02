@@ -69,7 +69,7 @@ certs/
 *.key
 *.crt
 
-CLAUDE.md
+.claude/
+CLAUDE.local.md
 API_NOTES.md
-GEMINI.md
 GEMINI_ANALYSIS.md
