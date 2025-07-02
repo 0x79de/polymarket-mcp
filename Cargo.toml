@@ -2,40 +2,37 @@
 name = "polymarket-mcp"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Polymarket MCP Contributors"]
 description = "MCP server for Polymarket prediction market data"
 license = "MIT"
 repository = "https://github.com/0x79de/polymarket-mcp"
 
 [dependencies]
-# MCP Rust SDK
+# Core MCP and async runtime
 rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", branch = "main", features = ["server", "macros"] }
-
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "io-std"] }
 futures = "0.3"
 
+# HTTP client and serialization
+reqwest = { version = "0.12", features = ["json", "gzip", "rustls-tls"], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-reqwest = { version = "0.12", features = ["json", "gzip", "rustls-tls"] }
+# Configuration and utilities
+config = "0.14"
+dotenv = "0.15"
+clap = { version = "4.0", features = ["derive"] }
+fastrand = "2.0"
 
-anyhow = "1.0"
-
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
+# Date/time and errors
 chrono = { version = "0.4", features = ["serde"] }
-
+anyhow = "1.0"
 thiserror = "1.0"
 uuid = { version = "1.0", features = ["v4"] }
 
-config = "0.14"
-dotenv = "0.15"
-
-
-clap = { version = "4.0", features = ["derive"] }
-
-fastrand = "2.0"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
